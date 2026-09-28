@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+*.joblib
+artefacts/
+# Both spellings: MODEL_ARTEFACTS_DIR has been seen set to ./artifacts, which
+# creates a second model directory one letter away from the first. Scoped to
+# backend/, so the project-root artifacts/ docs directory is unaffected.
+artifacts/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store

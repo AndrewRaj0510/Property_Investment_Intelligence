@@ -1,0 +1,174 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "DM Sans", system-ui, sans-serif;
+
+  --bg: #0a1628;
+  --surface: #0e1d33;
+  --card: #122442;
+  --card2: #16294b;
+  --line: rgba(255, 255, 255, 0.09);
+  --linegold: rgba(201, 168, 76, 0.25);
+  --text: #f2f5fa;
+  --muted: #8fa0b8;
+  --faint: #5b6b85;
+  --gold: #c9a84c;
+  --goldsoft: rgba(201, 168, 76, 0.12);
+  --green: #2fbf71;
+  --greensoft: rgba(47, 191, 113, 0.12);
+  --amber: #f0a93b;
+  --red: #e5544b;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --inputbg: rgba(255, 255, 255, 0.04);
+
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+body.light {
+  color-scheme: light;
+
+  --bg: #f4f2ec;
+  --surface: #fbfaf6;
+  --card: #ffffff;
+  --card2: #fdfbf5;
+  --line: rgba(10, 22, 40, 0.1);
+  --linegold: rgba(148, 113, 32, 0.3);
+  --text: #101e33;
+  --muted: #54627a;
+  --faint: #8a94a6;
+  --gold: #9a7a24;
+  --goldsoft: rgba(154, 122, 36, 0.1);
+  --green: #118a4e;
+  --greensoft: rgba(17, 138, 78, 0.1);
+  --amber: #a8730f;
+  --red: #c13a31;
+  --shadow: 0 10px 30px rgba(16, 30, 51, 0.1);
+  --inputbg: rgba(10, 22, 40, 0.03);
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--text);
+}
+
+input::placeholder {
+  color: var(--faint);
+}
+input {
+  color-scheme: dark;
+}
+body.light input {
+  color-scheme: light;
+}
+
+button {
+  font-family: inherit;
+}
+
+.listing-map-embed {
+  filter: brightness(0.86) saturate(0.92) contrast(1.02);
+}
+body.light .listing-map-embed {
+  filter: none;
+}
+
+p,
+.prose {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+.prose-center {
+  text-align: center;
+  hyphens: manual;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes growX {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes pinDrop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -140%);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -44%);
+  }
+  80% {
+    transform: translate(-50%, -56%);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+@keyframes pulseRing {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}

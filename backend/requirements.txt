@@ -1,0 +1,52 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Config & validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Database
+supabase==2.11.0
+psycopg[binary]==3.2.3   # direct Postgres (DDL / one-time table bootstrap)
+
+# ML
+lightgbm==4.5.0
+scikit-learn==1.6.0
+xgboost==2.1.3
+shap==0.46.0
+joblib==1.4.2
+pandas==2.2.3
+numpy==2.2.1
+
+# LLM. OpenAI is the active provider (LLM_PROVIDER=openai, F40); Ollama is kept
+# as the offline / zero-cost path the project was originally measured on (F19).
+# Adding langchain-openai pulled langchain up from 0.3.14 to the 1.x line.
+# Verified after the upgrade: the full suite passes and BOTH providers still
+# build and answer (ChatOllama on gpt-oss:120b-cloud returned in 3.5s), so the
+# pins below record what is actually installed rather than what was.
+langchain==1.3.10
+langchain-ollama==0.3.10
+langchain-openai==1.3.2
+
+# Ingestion / scraping
+openpyxl==3.1.5            # reads the manually-exported EIBOR workbook (Obj 3.1)
+httpx==0.28.1
+hijri-converter==2.3.1
+
+# Scheduling
+apscheduler==3.11.0
+
+# Security (JWT auth, password hashing, rate limiting)
+PyJWT==2.10.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+slowapi==0.1.9
+
+# Logging
+structlog==24.4.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.1

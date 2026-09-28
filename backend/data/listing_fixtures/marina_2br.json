@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "captured_at": null,
+    "source_url": "https://www.bayut.com/property/details-7654321.html",
+    "origin": "HAND-SEEDED, not a real Apify capture. Field SHAPE matches the Bayut normalizer, but the values are illustrative. Replace with a real capture via: python -m scripts.capture_listing <url> --name marina_2br"
+  },
+  "listing": {
+    "source": "bayut",
+    "listing_url": "https://www.bayut.com/property/details-7654321.html",
+    "listing_id": "7654321",
+    "title": "Spacious 2BR with Full Marina View",
+    "description": "Upgraded 2 bedroom apartment with high-end finishes, marble bathrooms, full sea view. Facilities include pool, gym, covered parking, concierge and children play area.",
+    "property_type": "Apartment",
+    "bedrooms": 2,
+    "bathrooms": 3,
+    "area_sqft": 1383.0,
+    "price": 1800000.0,
+    "purpose": "for-sale",
+    "rent_frequency": null,
+    "annual_rent": null,
+    "community": "Dubai Marina",
+    "latitude": 25.0805,
+    "longitude": 55.1403,
+    "amenities": [
+      "Pool",
+      "Gym",
+      "Covered Parking",
+      "Concierge",
+      "Play Area"
+    ]
+  }
+}

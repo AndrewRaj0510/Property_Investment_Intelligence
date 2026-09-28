@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Secrets: never commit. backend/.env holds live Supabase, DLD (DDA), Apify
+# and JWT credentials; .env.example is the checked-in template.
+.env
+*.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.jks
+id_rsa*
+id_ed25519*
+secrets/
+credentials*.json
+service-account*.json
+*secret*.json
+*.token
+
+# Claude Code local state (settings, memory, session data)
+.claude/
+
+# Dissertation drafts, proposal, raw DLD docs (incl. the DDA gateway token
+# spec) and working notes: kept out of the code repository.
+artifacts/
+
+# Personal project notes (aims tracker, memory, activity log)
+/AIM.md
+/MEMORY.md
+/Log.md
+
+# Saved live scoring output (real listing data)
+score_result.json
+
+# Logs and local databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Model artefacts (rebuilt by scripts/train_model.py)
+*.joblib
+artefacts/
+
+# Node / Next
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
