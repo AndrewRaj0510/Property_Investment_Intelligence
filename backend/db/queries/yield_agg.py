@@ -241,28 +241,3 @@ def compute_yield_medians(min_sample: int = DEFAULT_MIN_SAMPLE) -> list[dict]:
                 rows.append(row)
     log.info("yield_medians_computed", buckets=len(rows), min_sample=min_sample)
     return rows
-
-
-def area_type_median_yield(area: str, property_type: str) -> float | None:
-    """Look up the gross-yield median for one (area, property_type), or None.
-
-    The baseline the live-scoring verdict compares a listing's predicted yield
-    against. Matching is case-insensitive on a trimmed property type, mirroring
-    the aggregation.
-    """
-    settings = get_settings()
-    sql = _yield_select().rstrip().rstrip(";")
-    wrapped = (
-        f"SELECT gross_yield FROM ({sql}) q "
-        f"WHERE q.area = %(area)s AND q.property_type = %(ptype)s LIMIT 1"
-    )
-    params = {
-        "num": _POSITIVE_NUMBER,
-        "area": area,
-        "ptype": (property_type or "").strip().lower(),
-    }
-    with _connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(wrapped, params)
-            row = cur.fetchone()
-    return float(row[0]) if row else None

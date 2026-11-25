@@ -1,3 +1,4 @@
+import type { ListingSource } from "@/lib/listingSource";
 
 export const SCN = {
   community: {
@@ -59,75 +60,19 @@ export function scnModel(s: ScenarioState): { parts: ScnPart[]; total: number } 
   return { parts, total };
 }
 
-export const DEMO_LISTING = {
-  type: "APARTMENT",
-  community: "DUBAI MARINA",
-  title: "Sample 2-Bed Apartment, Marina Tower X",
-  subtitle: "Placeholder listing - replace with live Apify scrape",
-  price: "AED 9,999,999",
-  pricePerSqft: "AED 999 / sqft",
-  beds: "2",
-  baths: "2",
-  sqft: "1,234",
-  view: "Sea",
-  finish: "High",
-};
+// Tags describe the step, never a result: the steps animate on a timer while
+// /score runs, so no real value exists yet to show. (A fixed "apify/bayut-scraper"
+// tag and Dubai Marina coordinates used to be shown for every listing.)
+export function loadSteps(source: ListingSource | null) {
+  return [
+    {
+      label: "Contacting Apify actor",
+      tag: source ? `apify · ${source} scraper` : "apify",
+    },
+    { label: "Scraping listing attributes", tag: "price · size · view · finish" },
+    { label: "Locating the community", tag: "portal area → DLD area" },
+    { label: "Running yield model", tag: "XGBoost + SHAP" },
+  ];
+}
 
-export const DEMO_SHAP = [
-  {
-    name: "Sea view",
-    value: "+0.8%",
-    width: "92%",
-    color: "var(--green)",
-    delay: ".1s",
-    note: "Sea-view units in this tower rent at a premium year-round.",
-  },
-  {
-    name: "Metro proximity",
-    value: "+0.4%",
-    width: "52%",
-    color: "var(--green)",
-    delay: ".2s",
-    note: "6 min walk to DMCC station widens the tenant pool.",
-  },
-  {
-    name: "High finish tier",
-    value: "+0.3%",
-    width: "40%",
-    color: "var(--green)",
-    delay: ".3s",
-    note: "Upgraded finish supports higher asking rent per sqft.",
-  },
-  {
-    name: "Floor area",
-    value: "+0.1%",
-    width: "16%",
-    color: "var(--gold)",
-    delay: ".4s",
-    note: "1,234 sqft is near the sweet spot for 2-bed demand.",
-  },
-  {
-    name: "Summer seasonality",
-    value: "−0.4%",
-    width: "48%",
-    color: "var(--red)",
-    delay: ".5s",
-    note: "July heat suppresses short-term occupancy 15-20%.",
-  },
-];
-
-export const DEMO_MACRO = {
-  eibor: "5.10%",
-  brent: "$78.4",
-  temp: "41°C",
-  tempLabel: "HOT",
-  tourists: "1.4M",
-  touristsDelta: "+6%",
-};
-
-export const LOAD_STEPS = [
-  { label: "Contacting Apify actor", tag: "apify/bayut-scraper" },
-  { label: "Scraping listing attributes", tag: "price · size · view · finish" },
-  { label: "Geocoding location", tag: "lat 25.08 · lng 55.14" },
-  { label: "Running yield model", tag: "XGBoost + SHAP" },
-];
+export const LOAD_STEP_COUNT = loadSteps(null).length;

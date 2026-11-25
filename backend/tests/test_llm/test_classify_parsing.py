@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-import config
 from llm.chains import classify_listing as cl
 
 

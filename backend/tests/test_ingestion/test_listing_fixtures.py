@@ -51,6 +51,18 @@ def test_save_then_load(saved):
     assert got["price"] == 1_800_000.0
 
 
+def test_load_cleans_html_from_old_captures(saved):
+    """A capture taken before clean_description existed holds raw portal HTML;
+    replaying it must give the same plain text a live fetch gives today."""
+    fx.save(
+        "old_capture",
+        {**LISTING, "description": "O2 Tower.<br><br>By <a href=\"https://x\">Tiger</a> &amp; co"},
+    )
+    got = fx.load("old_capture")
+    assert got["description"] == "O2 Tower.\n\nBy Tiger & co"
+    assert "<" not in got["description"]
+
+
 def test_available_lists_saved(saved):
     assert "unit_test_listing" in fx.available()
 

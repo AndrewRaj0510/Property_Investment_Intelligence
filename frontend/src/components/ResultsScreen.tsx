@@ -8,8 +8,7 @@ import type {
   PriceHistory,
   ScoreResponse,
 } from "@/lib/types";
-import { DEMO_LISTING } from "@/lib/demo";
-import { driverLabel } from "@/lib/labels";
+import { driverLabel, propertyTypeLabel } from "@/lib/labels";
 import { FocusInput } from "./FocusInput";
 import { HoverButton } from "./HoverButton";
 import { ListingMap } from "./ListingMap";
@@ -24,8 +23,8 @@ interface ShapRow {
   note: string;
 }
 
-function shapRows(score: ScoreResponse | null): ShapRow[] {
-  const shap = score?.model?.shap;
+function shapRows(score: ScoreResponse): ShapRow[] {
+  const shap = score.model?.shap;
   if (!shap || Object.keys(shap).length === 0) return [];
 
   const entries = Object.entries(shap)
@@ -58,34 +57,33 @@ export function ResultsScreen({
   analyzedUrl: string;
   yieldDisplay: string;
   gaugeOffset: number;
-  score: ScoreResponse | null;
+  score: ScoreResponse;
   macro: MacroSnapshot | null;
   onReset: () => void;
   onOpenScenario: () => void;
 }) {
-  const live = score;
   const shap = shapRows(score);
+  // The backend labels every /score result live | fixture (F19); a saved
+  // capture must never be presented as a live fetch.
+  const isFixture = score.source_mode === "fixture";
 
   const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null);
 
   const metroDriver = (() => {
-    const keys = Object.keys(score?.model?.shap ?? {});
-    const k = keys.find((n) => n.startsWith("nearest_metro_") && (score!.model!.shap![n] ?? 0) !== 0)
+    const keys = Object.keys(score.model?.shap ?? {});
+    const k = keys.find((n) => n.startsWith("nearest_metro_") && (score.model!.shap![n] ?? 0) !== 0)
       ?? keys.find((n) => n.startsWith("nearest_metro_"));
     return k ? k.replace("nearest_metro_", "") : null;
   })();
 
-  const predicted = score ? score.scoring.actual_gross_yield * 100 : 6.2;
-  const expected = score ? score.scoring.expected_gross_yield * 100 : 5.5;
-  const median = score?.baseline
+  const predicted = score.scoring.actual_gross_yield * 100;
+  const expected = score.scoring.expected_gross_yield * 100;
+  const median = score.baseline
     ? score.baseline.median_gross_yield * 100
     : null;
   const delta = predicted - expected;
-  const narrative =
-    score?.narrative ||
-    score?.verdict?.reason ||
-    "This is the demo dataset the design ships with - no live listing was scored.";
-  const narrativeDetail = score?.narrative_detail ?? null;
+  const narrative = score.narrative || score.verdict.reason;
+  const narrativeDetail = score.narrative_detail ?? null;
 
   return (
     <div
@@ -121,11 +119,16 @@ export function ResultsScreen({
           {analyzedUrl}
         </span>
         <span
+          title={
+            isFixture
+              ? "Listing read from a saved capture (LISTING_FIXTURE_MODE / fixture://), not fetched live. The model, DLD baseline and narrative ran live."
+              : "Listing fetched live from the portal and scored by the live model."
+          }
           style={{
             font: "600 9.5px 'JetBrains Mono',monospace",
-            color: live ? "var(--gold)" : "var(--green)",
-            background: live ? "var(--goldsoft)" : "var(--greensoft)",
-            border: `1px solid ${live ? "var(--gold)" : "var(--green)"}`,
+            color: "var(--gold)",
+            background: "var(--goldsoft)",
+            border: "1px solid var(--gold)",
             borderRadius: 999,
             padding: "3px 9px",
             letterSpacing: "0.08em",
@@ -133,7 +136,7 @@ export function ResultsScreen({
             flex: "none",
           }}
         >
-          {live ? "FETCHED · LIVE MODEL" : "FETCHED · DEMO DATA"}
+          {isFixture ? "SAVED CAPTURE · LIVE MODEL" : "FETCHED · LIVE MODEL"}
         </span>
         <HoverButton
           onClick={onReset}
@@ -159,13 +162,12 @@ export function ResultsScreen({
       <InvestmentSummary
         narrative={narrative}
         detail={narrativeDetail}
-        verdictLabel={score?.verdict?.label ?? null}
-        confidence={score?.verdict?.confidence ?? null}
+        verdictLabel={score.verdict.label}
+        confidence={score.verdict.confidence}
         predicted={predicted}
         expected={expected}
         median={median}
         delta={delta}
-        hasScore={!!score}
         onOpenScenario={onOpenScenario}
       />
 
@@ -185,8 +187,8 @@ export function ResultsScreen({
             expected={expected}
             delta={delta}
             median={median}
-            verdictLabel={score?.verdict?.label ?? null}
-            confidence={score?.verdict?.confidence ?? "demo"}
+            verdictLabel={score.verdict.label}
+            confidence={score.verdict.confidence}
           />
           <ShapCard shap={shap} />
           <MacroContextCard macro={macro} fill />
@@ -194,16 +196,16 @@ export function ResultsScreen({
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <PriceTrendChart
-            area={score?.baseline?.area ?? score?.listing?.community}
+            area={score.baseline?.area ?? score.listing.community}
             propertyType={
-              score?.baseline?.property_type ?? score?.listing?.property_type
+              score.baseline?.property_type ?? score.listing.property_type
             }
             onData={setPriceHistory}
           />
           <ListingMap
-            lat={score?.listing?.latitude}
-            lng={score?.listing?.longitude}
-            community={score?.listing?.community}
+            lat={score.listing.latitude}
+            lng={score.listing.longitude}
+            community={score.listing.community}
             metro={metroDriver}
           />
         </div>
@@ -216,54 +218,35 @@ export function ResultsScreen({
   );
 }
 
-function ListingCard({ score }: { score: ScoreResponse | null }) {
-  const lst = score?.listing;
-  const character = score?.character ?? null;
-  const isRent = lst?.purpose === "for-rent";
-  const priceVal = lst ? (isRent ? lst.annual_rent : lst.price) ?? lst.price : null;
+function ListingCard({ score }: { score: ScoreResponse }) {
+  const lst = score.listing;
+  const character = score.character ?? null;
+  const isRent = lst.purpose === "for-rent";
+  const priceVal = (isRent ? lst.annual_rent : lst.price) ?? lst.price;
   const fmtAed = (n?: number | null) =>
     n == null ? null : `AED ${Math.round(n).toLocaleString()}`;
 
-  const L = lst
-    ? {
-        type: lst.property_type ?? "n/a",
-        community: lst.community ?? "n/a",
-        purpose: isRent ? "For rent" : "For sale",
-        title: lst.title ?? "Untitled listing",
-        description: lst.description ?? null,
-        detailGated: lst.detail_gated ?? false,
-        beds: lst.bedrooms === 0 ? "Studio" : (lst.bedrooms ?? "n/a"),
-        baths: lst.bathrooms ?? "n/a",
-        sqft: lst.area_sqft ? Math.round(lst.area_sqft).toLocaleString() : "n/a",
-        sqm: lst.area_sqft ? Math.round(lst.area_sqft / 10.7639).toLocaleString() : null,
-        price: fmtAed(priceVal) ?? "n/a",
-        priceLabel: isRent ? "annual rent" : "asking price",
-        pricePerSqft:
-          priceVal && lst.area_sqft
-            ? `AED ${Math.round(priceVal / lst.area_sqft).toLocaleString()}/sqft`
-            : "n/a",
-        amenities: lst.amenities ?? [],
-        url: lst.listing_url ?? null,
-        source: lst.source ?? null,
-      }
-    : {
-        type: DEMO_LISTING.type,
-        community: DEMO_LISTING.community,
-        purpose: "For sale",
-        title: DEMO_LISTING.title,
-        description: null as string | null,
-        detailGated: false,
-        beds: DEMO_LISTING.beds ?? "n/a",
-        baths: DEMO_LISTING.baths ?? "n/a",
-        sqft: DEMO_LISTING.sqft ?? "n/a",
-        sqm: null as string | null,
-        price: DEMO_LISTING.price,
-        priceLabel: "asking price",
-        pricePerSqft: DEMO_LISTING.pricePerSqft,
-        amenities: [] as string[],
-        url: null as string | null,
-        source: null as string | null,
-      };
+  const L = {
+    type: propertyTypeLabel(lst.property_type),
+    community: lst.community ?? "n/a",
+    purpose: isRent ? "For rent" : "For sale",
+    title: lst.title ?? "Untitled listing",
+    description: lst.description ?? null,
+    detailGated: lst.detail_gated ?? false,
+    beds: lst.bedrooms === 0 ? "Studio" : (lst.bedrooms ?? "n/a"),
+    baths: lst.bathrooms ?? "n/a",
+    sqft: lst.area_sqft ? Math.round(lst.area_sqft).toLocaleString() : "n/a",
+    sqm: lst.area_sqft ? Math.round(lst.area_sqft / 10.7639).toLocaleString() : null,
+    price: fmtAed(priceVal) ?? "n/a",
+    priceLabel: isRent ? "annual rent" : "asking price",
+    pricePerSqft:
+      priceVal && lst.area_sqft
+        ? `AED ${Math.round(priceVal / lst.area_sqft).toLocaleString()}/sqft`
+        : "n/a",
+    amenities: lst.amenities ?? [],
+    url: lst.listing_url ?? null,
+    source: lst.source ?? null,
+  };
 
   const stats = [
     { v: L.beds, k: "BEDROOMS" },
@@ -1036,7 +1019,6 @@ function InvestmentSummary({
   expected,
   median,
   delta,
-  hasScore,
   onOpenScenario,
 }: {
   narrative: string;
@@ -1047,23 +1029,20 @@ function InvestmentSummary({
   expected: number;
   median: number | null;
   delta: number;
-  hasScore: boolean;
   onOpenScenario: () => void;
 }) {
   const negligible = Math.abs(delta) < 0.05;
   const hasBaseline = median != null;
   const beats = delta >= 0;
-  const good = hasScore && hasBaseline && !negligible && beats;
+  const good = hasBaseline && !negligible && beats;
 
-  const headline = !hasScore
-    ? "This is the demo dataset the design ships with."
-    : !hasBaseline
-      ? "This property cannot be compared against local sales records."
-      : negligible
-        ? "This property earns about the going rate for its area."
-        : beats
-          ? "This property earns more rent for its price than similar ones nearby."
-          : "This property earns less rent for its price than similar ones nearby.";
+  const headline = !hasBaseline
+    ? "This property cannot be compared against local sales records."
+    : negligible
+      ? "This property earns about the going rate for its area."
+      : beats
+        ? "This property earns more rent for its price than similar ones nearby."
+        : "This property earns less rent for its price than similar ones nearby.";
 
   return (
     <div
@@ -1221,41 +1200,39 @@ function InvestmentSummary({
         <p style={introStyle}>{narrative}</p>
       )}
 
-      {hasScore && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(min(260px,100%),1fr))",
-            gap: 12,
-            marginTop: 20,
-          }}
-        >
-          <PlainFact
-            label="What it earns"
-            value={`${predicted.toFixed(1)}% a year`}
-            body={`For every AED 100 of the purchase price, the rent brings in about AED ${predicted.toFixed(
-              1
-            )} a year, before service charges, agency fees and maintenance.`}
-          />
-          <PlainFact
-            label="What the model expected"
-            value={`${expected.toFixed(1)}% a year`}
-            body={
-              hasBaseline
-                ? `Similar homes in this area typically return ${median!.toFixed(
-                    1
-                  )}%, so this one is ${
-                    negligible
-                      ? "in line with them"
-                      : `${Math.abs(delta).toFixed(1)} points ${
-                          beats ? "above" : "below"
-                        } what was expected`
-                  }.`
-                : "There are no recorded sales or rent contracts for this area and property type to compare against."
-            }
-          />
-        </div>
-      )}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit,minmax(min(260px,100%),1fr))",
+          gap: 12,
+          marginTop: 20,
+        }}
+      >
+        <PlainFact
+          label="What it earns"
+          value={`${predicted.toFixed(1)}% a year`}
+          body={`For every AED 100 of the purchase price, the rent brings in about AED ${predicted.toFixed(
+            1
+          )} a year, before service charges, agency fees and maintenance.`}
+        />
+        <PlainFact
+          label="What the model expected"
+          value={`${expected.toFixed(1)}% a year`}
+          body={
+            hasBaseline
+              ? `Similar homes in this area typically return ${median!.toFixed(
+                  1
+                )}%, so this one is ${
+                  negligible
+                    ? "in line with them"
+                    : `${Math.abs(delta).toFixed(1)} points ${
+                        beats ? "above" : "below"
+                      } what was expected`
+                }.`
+              : "There are no recorded sales or rent contracts for this area and property type to compare against."
+          }
+        />
+      </div>
 
       {confidence && (
         <p
@@ -1327,7 +1304,7 @@ function confidenceText(confidence: string): string {
     case "very_low":
       return "There is no independent sale price for this area and property type, so the two yields above are not genuinely comparable and no judgement on the asking price is possible.";
     default:
-      return "This is demonstration data, not a live analysis of a real listing.";
+      return "The confidence level for this result was not reported.";
   }
 }
 
@@ -1404,7 +1381,7 @@ function AskPanel({
   score,
   priceHistory,
 }: {
-  score: ScoreResponse | null;
+  score: ScoreResponse;
   priceHistory: PriceHistory | null;
 }) {
   const [question, setQuestion] = useState("");
@@ -1417,8 +1394,6 @@ function AskPanel({
       endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [turns]);
-
-  if (!score) return null;
 
   const ask = async () => {
     const q = question.trim();

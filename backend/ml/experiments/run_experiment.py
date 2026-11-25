@@ -6,6 +6,13 @@ and the three models (RF hyperparameter-tuned) under identical 5-fold CV, and
 also tries a log-transformed target for each. Prints a side-by-side comparison so
 the user can decide whether to adopt V2.
 
+Historical record, no longer a reproduction: V2 was adopted, so the production
+builder imported below as ``build_v1`` IS the V2 grain, and the original V1 SQL
+(area × type × year with ``bedrooms_median``) no longer exists in the codebase. The
+F11 figures stand as recorded at the time; re-running this compares V2 with itself
+(and the V1 arm silently lacks ``bedrooms_median``). The V1 builder predates the
+repository, so a true re-run would need it rewritten from the F11 description.
+
 Run (Windows):
     cd backend && .venv\\Scripts\\python.exe -m ml.experiments.run_experiment
 """

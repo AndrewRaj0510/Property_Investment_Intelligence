@@ -68,61 +68,16 @@ from db.queries.yield_agg import DISTRIBUTION_COLUMNS, MEDIANS_TABLE
 from ingestion.listing_client import fetch_listing
 from db.pg import connect as _connect
 from db.pg import quote_ident as _quote_ident
+from ml.community_resolve import resolve_area
+from ml.property_types import canonical_type
 
 log = structlog.get_logger(__name__)
 
-_TYPE_ALIASES = {
-    "apartment": "apartment",
-    "apartments": "apartment",
-    "flat": "apartment",
-    "flats": "apartment",
-    "residential": "apartment",
-    "apartmentflat": "apartment",
-    "apartment/flat": "apartment",
-    "apartment flat": "apartment",
-    "duplex": "apartment",
-    "studio": "apartment",
-    "studios": "apartment",
-    "penthouse": "apartment",
-    "penthouses": "apartment",
-    "hotel apartment": "apartment",
-    "hotel apartments": "apartment",
-    "villa": "villa",
-    "villas": "villa",
-    "townhouse": "villa",
-    "townhouses": "villa",
-    "compound": "villa",
-    "complex villas": "villa",
-    "arabian house": "villa",
-}
+_resolve_area = resolve_area
 
 
 class NoBaselineForListing(RuntimeError):
     """Raised when we have no yield median for the listing's area + type."""
-
-
-def canonical_type(raw_type: str | None) -> str | None:
-    """Map a portal's property type to the model's canonical type, or None.
-
-    The model's vocabulary is {apartment, villa}. A "studio" is an apartment with
-    ``bedrooms=0`` (the portals report studios as Apartment/rooms=0 anyway, and the
-    model learned studios in the 0-bed apartment bucket), so the type does not
-    branch on bedroom count.
-    """
-    if not raw_type:
-        return None
-    return _TYPE_ALIASES.get(raw_type.strip().lower())
-
-
-def _resolve_area(area: str) -> str:
-    """Resolve a popular community name to DLD's area_name_en, using the SAME
-    alias map the model uses - so the median lookup and the model agree on the
-    area (e.g. a listing's "Dubai Marina" → "Marsa Dubai" in both)."""
-    try:
-        from ml.predict import _resolve_community
-        return _resolve_community(area)
-    except Exception:  # noqa: BLE001 - if model module unavailable, use as-is
-        return area
 
 
 def _pick_area(listing: dict, ptype: str) -> tuple[str | None, dict | None]:

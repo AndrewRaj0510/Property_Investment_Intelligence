@@ -33,19 +33,20 @@ MSc dissertation project · Andrew Isaac Raj G (M01051900) · Middlesex Universi
 ## Table of contents
 
 1. [What it does](#what-it-does)
-2. [Scope & coverage - what it can and cannot score](#scope--coverage--what-it-can-and-cannot-score)
-3. [Aims & objectives - checklist](#aims--objectives--checklist)
-4. [Architecture at a glance](#architecture-at-a-glance)
-5. [Repository structure](#repository-structure)
-6. [Prerequisites](#prerequisites)
-7. [Running the backend](#running-the-backend)
-8. [Running the frontend](#running-the-frontend)
-9. [Configuration (environment variables)](#configuration-environment-variables)
-10. [Data & model lifecycle](#data--model-lifecycle)
-11. [API endpoints](#api-endpoints)
-12. [Testing](#testing)
-13. [Troubleshooting](#troubleshooting)
-14. [Design decisions worth knowing](#design-decisions-worth-knowing)
+2. [Screenshots](#screenshots)
+3. [Scope & coverage - what it can and cannot score](#scope--coverage--what-it-can-and-cannot-score)
+4. [Aims & objectives - checklist](#aims--objectives--checklist)
+5. [Architecture at a glance](#architecture-at-a-glance)
+6. [Repository structure](#repository-structure)
+7. [Prerequisites](#prerequisites)
+8. [Running the backend](#running-the-backend)
+9. [Running the frontend](#running-the-frontend)
+10. [Configuration (environment variables)](#configuration-environment-variables)
+11. [Data & model lifecycle](#data--model-lifecycle)
+12. [API endpoints](#api-endpoints)
+13. [Testing](#testing)
+14. [Troubleshooting](#troubleshooting)
+15. [Design decisions worth knowing](#design-decisions-worth-knowing)
 
 ---
 
@@ -72,6 +73,40 @@ with SHAP feature attributions and a short LLM-generated narrative.
 
 It is **not** a price predictor, and it never re-predicts facts the listing already
 states. See finding **F8** for the full framing.
+
+---
+
+## Screenshots
+
+Captured 2026-11-25 from the running app (FastAPI + Next.js dev server, live Supabase
+database, Phase-1 XGBoost model, OpenAI narrative). The listing was scored with
+`LISTING_FIXTURE_MODE=replay`, so the page was served from a **saved real Dubizzle
+capture** instead of a paid Apify fetch; the model, the DLD baseline, the price history and
+the narrative all ran live. The results badge says so (**SAVED CAPTURE · LIVE MODEL**); a
+live fetch reads **FETCHED · LIVE MODEL**.
+
+**1. Landing page.** Paste a Bayut or Dubizzle URL. The header chips are the latest
+ingested macro and weather values, each with its as-of month.
+
+![Landing page](docs/screenshots/landing.png)
+
+**2. Analysis in progress.** Fetch the listing through the portal's Apify actor, read its
+attributes, resolve the portal's community name to a DLD area, then run the yield model.
+
+![Loading screen](docs/screenshots/loading.png)
+
+**3. Results: the listing.** What the portal states (here a 1-bed rental in JVC District
+14 at AED 75,000 a year), its amenities, and the LLM's reading of the description, which
+is context only and never a model input.
+
+![Results screen, listing card](docs/screenshots/results-top.png)
+
+**4. Results: the full analysis.** The verdict with its plain-English narrative, the
+predicted gross yield against the model's expectation (10.6% actual vs 6.1% expected),
+the SHAP drivers, the quarterly DLD price history, the location map, macro context
+(labelled as not a model input) and the grounded Q&A box.
+
+![Results screen, full page](docs/screenshots/results.png)
 
 ---
 
@@ -339,37 +374,80 @@ accuracy gain.** A Phase-2 model is trained and active (`phase2_v1_xgboost`, CV 
 
 ## Architecture at a glance
 
-```
-                 ┌──────────────────────────────────────────────┐
-   Live listing  │              FRONTEND (Next.js 14)            │
-   URL pasted →  │  YieldLens Dubai · TS · same-origin proxy     │
-                 └───────────────────────┬──────────────────────┘
-                                          │  /api/v1/*  (Next rewrite → FastAPI)
-                 ┌────────────────────────▼──────────────────────┐
-                 │                 BACKEND (FastAPI)              │
-                 │                                                │
-                 │  API routes  ── /score  /predict  /communities │
-                 │              ── /compare /shap /health  /auth   │
-                 │                                                │
-                 │  services/listing_scorer  ← the product core    │
-                 │       │                                         │
-                 │       ├── ingestion/listing_client (Apify)      │
-                 │       ├── ml/predict  (XGBoost + SHAP)          │
-                 │       └── db/queries/yield_agg (median baseline)│
-                 │                                                │
-                 │  llm/ (LangChain + OpenAI: narrate/classify/QA) │
-                 │  scheduler/ (weekly macro refresh, Mon 03:00)   │
-                 └────────────────────────┬──────────────────────┘
-                                          │  psycopg (direct Postgres)
-                 ┌────────────────────────▼──────────────────────┐
-                 │            Supabase PostgreSQL                 │
-                 │  dld_transactions_raw · dld_rent_contracts_raw │
-                 │  feature_matrix · community_yield_medians      │
-                 │  model_runs · shap_summary                     │
-                 └────────────────────────────────────────────────┘
-                                          ▲
-     OFFLINE (manual, run as scripts):  DLD DDA OpenAPI → ingest → clean (SQL)
-                                        → feature matrix → train → persist model
+```mermaid
+flowchart TB
+    user(["Investor pastes a Bayut / Dubizzle listing URL"])
+
+    subgraph FE["FRONTEND: Next.js 14 + TypeScript (YieldLens Dubai)"]
+        direction LR
+        ui["page.tsx<br/>IdleHero → LoadingScreen → ResultsScreen / AnalysisFailed"]
+        panels["ResultsScreen panels<br/>ListingMap · PriceTrendChart · ComparisonPanel<br/>MacroOverlay · ScenarioModal · grounded Q and A"]
+        apits["lib/api.ts<br/>backend client"]
+        ui --- panels
+        ui --> apits
+    end
+
+    subgraph BE["BACKEND: FastAPI"]
+        direction TB
+        routes["API routes /api/v1<br/>score · predict · explain · communities · compare<br/>comparison · shap · market · macro · seasonal<br/>health · auth · admin (JWT)"]
+        scorer["services/listing_scorer<br/>★ product core: listing → expected yield → verdict"]
+        listing["ingestion/listing_client<br/>per-URL fetch (or saved fixture)"]
+        predict["ml/predict<br/>XGBoost + SHAP TreeExplainer"]
+        resolve["ml/community_resolve<br/>portal name → DLD area"]
+        baseline["db/queries/yield_agg<br/>median yield baseline"]
+        llm["llm/chains (LangChain)<br/>explain_score · explain_shap<br/>classify_listing · answer_question"]
+        sched["scheduler/<br/>weekly macro refresh (Mon 03:00)"]
+
+        routes --> scorer
+        routes --> predict
+        routes --> llm
+        scorer --> listing
+        scorer --> resolve
+        scorer --> predict
+        scorer --> baseline
+        scorer --> llm
+    end
+
+    subgraph DB["Supabase PostgreSQL (psycopg, no ORM)"]
+        direction LR
+        raw[("dld_transactions_raw<br/>dld_rent_contracts_raw")]
+        feat[("feature_matrix<br/>community_yield_medians<br/>community_price_history")]
+        reg[("model_runs<br/>shap_summary")]
+        ext[("macro_timeseries · macro_annual<br/>community_features · aliases")]
+    end
+
+    subgraph EXT["External services"]
+        direction LR
+        apify["Apify actors<br/>Bayut + Dubizzle"]
+        openai["OpenAI gpt-5<br/>(Ollama fallback)"]
+        dld["DLD via data.dubai<br/>DDA OpenAPI"]
+        sources["OSM · EIBOR · EIA Brent<br/>World Bank · Open-Meteo"]
+    end
+
+    subgraph OFF["OFFLINE PIPELINE (backend/scripts, run by hand)"]
+        direction LR
+        ingest["pull_and_store_dld<br/>pull_and_store_rent_contracts"] --> clean["feature_matrix_dld<br/>declarative SQL cleaning"]
+        clean --> train["train_model<br/>LightGBM vs RF vs XGBoost<br/>5-fold CV, pick best"]
+        refresh["refresh_yield_medians<br/>refresh_price_history<br/>ingest_macro · refresh_osm"]
+    end
+
+    user --> ui
+    apits -- "/api/v1/* via Next rewrite<br/>(same-origin proxy)" --> routes
+    listing --> apify
+    llm --> openai
+    predict --> reg
+    baseline --> feat
+    routes --> ext
+    sched --> sources
+    sched --> ext
+
+    dld --> ingest
+    ingest --> raw
+    clean --> feat
+    train --> reg
+    sources --> refresh
+    refresh --> feat
+    refresh --> ext
 ```
 
 **Two independent flows:**
@@ -395,6 +473,7 @@ accuracy gain.** A Phase-2 model is trained and active (`phase2_v1_xgboost`, CV 
 Property_Investment_Intelligence/
 ├── README.md                     ← you are here
 ├── .gitignore                    ← also excludes the local-only notes below
+├── docs/screenshots/             ← README screenshots (landing, loading, results-top, results)
 │
 ├── backend/                      ← FastAPI service (see detail below)
 │   └── README.md                 ← backend-specific quick start
@@ -441,7 +520,8 @@ backend/
 │   ├── shap_explainer.py   # SHAP TreeExplainer wrapper
 │   ├── artefacts.py        # joblib save/load
 │   ├── macro_features.py   # Phase-2 macro join (annual grain)
-│   ├── community_resolve.py # portal name → DLD area_name_en via mined aliases
+│   ├── community_resolve.py # resolve_area(): portal name → DLD area_name_en (model, scorer, price history)
+│   ├── property_types.py   # the one portal-type → {apartment, villa} map
 │   └── experiments/        # isolated, read-only experiments (F11 features, OSM, Phase 2, SHAP, F45 leakage)
 │
 ├── db/

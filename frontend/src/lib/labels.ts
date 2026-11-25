@@ -19,3 +19,21 @@ export function driverLabel(feature: string): string {
     return feature.slice("property_type_".length).replace(/^\w/, (c) => c.toUpperCase());
   return feature.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+// Portal property types arrive in the portals' own spelling: Dubizzle's URL and
+// breadcrumb give "apartmentflat" / "apartment/flat". The model folds these into
+// apartment | villa (backend ml/property_types.py); this is only the display name.
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  apartmentflat: "Apartment",
+  "apartment/flat": "Apartment",
+  "apartment flat": "Apartment",
+  "hotel apartment": "Hotel apartment",
+};
+
+export function propertyTypeLabel(raw: string | null | undefined): string {
+  const t = (raw ?? "").trim();
+  if (!t) return "n/a";
+  const known = PROPERTY_TYPE_LABELS[t.toLowerCase()];
+  if (known) return known;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}

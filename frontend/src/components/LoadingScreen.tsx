@@ -1,9 +1,17 @@
 "use client";
 
-import { LOAD_STEPS } from "@/lib/demo";
+import { loadSteps } from "@/lib/demo";
+import type { ListingSource } from "@/lib/listingSource";
 
-export function LoadingScreen({ loadStep }: { loadStep: number }) {
-  const cur = LOAD_STEPS[Math.min(loadStep, LOAD_STEPS.length - 1)];
+export function LoadingScreen({
+  loadStep,
+  source,
+}: {
+  loadStep: number;
+  source: ListingSource | null;
+}) {
+  const steps = loadSteps(source);
+  const cur = steps[Math.min(loadStep, steps.length - 1)];
 
   return (
     <div
@@ -61,7 +69,7 @@ export function LoadingScreen({ loadStep }: { loadStep: number }) {
             gap: 9,
           }}
         >
-          {LOAD_STEPS.map((st, i) => {
+          {steps.map((st, i) => {
             const mark = i < loadStep ? "✓" : i === loadStep ? "●" : "○";
             const markColor =
               i < loadStep

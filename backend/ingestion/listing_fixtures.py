@@ -69,6 +69,14 @@ def load(name: str) -> dict:
     missing = [k for k in REQUIRED_KEYS if k not in listing]
     if missing:
         raise ValueError(f"Fixture {safe!r} is missing required keys: {missing}")
+    # A capture stores the listing as normalised AT CAPTURE TIME. Captures that
+    # predate clean_description still hold the portal's raw HTML, which then
+    # reached the UI as literal "<br><a href=...>" text. Re-cleaning on load is
+    # idempotent on already-clean text, so every replay sees what a live fetch
+    # would produce today.
+    from ingestion.listing_client import clean_description
+
+    listing["description"] = clean_description(listing.get("description"))
     log.info("listing_fixture_loaded", name=safe, community=listing.get("community"))
     return listing
 

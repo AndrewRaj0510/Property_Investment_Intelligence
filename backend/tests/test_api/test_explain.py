@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-import config
 from api.routes import explain as explain_route
 
 VALID_CONTEXT = {
