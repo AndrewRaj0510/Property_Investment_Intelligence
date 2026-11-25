@@ -1,29 +1,29 @@
-"""Scheduled maintenance tasks - macro and OSM refreshes.
+"""Scheduled maintenance task - the weekly macro refresh.
 
-These two were previously LangGraph nodes (``pipeline/nodes/ingest_macro.py``
-and ``ingest_osm.py``). The graph around them was removed because it orchestrated
-a data flow this project does not use: it wrote to ``dld_transactions`` and
+This was previously a LangGraph node (``pipeline/nodes/ingest_macro.py``). The
+graph around it was removed because it orchestrated a data flow this project does not use: it wrote to ``dld_transactions`` and
 ``rental_listings``, neither of which exists in the deployed database, while the
 model is actually built from ``dld_transactions_raw`` and
 ``dld_rent_contracts_raw`` loaded from DDA portal CSVs. See DISSERTATION_FINDINGS
 F34.
 
-These two survived because they are the only stages that did real, current work:
-both persist over psycopg and both wrap the same scripts a human would run by
-hand. They are plain async functions now - the ``state`` dict they used to thread
-existed only to satisfy the graph's signature.
+It survived because it did real, current work: it persists over psycopg and wraps
+the same ingestion a human would run by hand (``scripts.ingest_macro``). It is a
+plain async function now - the ``state`` dict it used to thread existed only to
+satisfy the graph's signature. The OSM refresh is run by hand
+(``python -m scripts.refresh_osm_features``): it makes hundreds of paced calls to
+rate-limited public endpoints and the features it feeds were measured as a null
+result (F22c), so it is not scheduled.
 """
 
 from __future__ import annotations
-
-import asyncio
 
 import structlog
 
 log = structlog.get_logger(__name__)
 
 FROZEN_OBJECTIVES = {
-    "3.3": "Tourism volumes + COVID/Ramadan/Expo dummies (data/tourism.csv absent)",
+    "3.3": "Tourism volumes (de-scoped on measured evidence, F31); calendar dummies are ingested",
 }
 
 
@@ -88,26 +88,3 @@ async def refresh_macro() -> dict:
         log.error("refresh_macro_failed", error=str(exc))
         return {"monthly_rows": 0, "annual_rows": 0, "errors": [str(exc)]}
 
-
-async def refresh_osm() -> dict:
-    """Re-derive OSM locational features for every DLD community. Never raises.
-
-    Thin wrapper over ``scripts.refresh_osm_features.refresh``, which is also the
-    standalone entrypoint. Blocking (hundreds of paced HTTP calls against
-    rate-limited public OSM endpoints), so it runs off the event loop.
-    """
-    from scripts.refresh_osm_features import refresh
-
-    log.info("refresh_osm_start")
-    try:
-        result = await asyncio.to_thread(refresh)
-        log.info(
-            "refresh_osm_done",
-            enriched=result["enriched"],
-            skipped=len(result["failed"]),
-            coverage=result["coverage"],
-        )
-        return {"enriched": result["enriched"], "errors": []}
-    except Exception as exc:  # noqa: BLE001
-        log.error("refresh_osm_failed", error=str(exc))
-        return {"enriched": 0, "errors": [str(exc)]}

@@ -87,7 +87,7 @@ def patched(monkeypatch):
 
 
 def test_spread_reaches_the_analysis(patched):
-    conn = patched(_Conn(BASE_ROW + SPREAD))
+    patched(_Conn(BASE_ROW + SPREAD))
     baseline = listing_scorer._baseline_for("Marsa Dubai", "apartment")
     assert baseline["median_annual_rent"] == 112_200.0
     assert baseline["p90_annual_rent"] == 190_000.0
@@ -108,7 +108,7 @@ def test_a_snapshot_without_the_columns_still_scores(patched):
     So an older snapshot has to yield a working baseline with the extra fields
     empty, not an exception that costs the caller their analysis.
     """
-    conn = patched(_Conn(BASE_ROW, narrow_table=True))
+    patched(_Conn(BASE_ROW, narrow_table=True))
     baseline = listing_scorer._baseline_for("Marsa Dubai", "apartment")
     assert baseline["gross_yield"] == 0.055
     assert baseline["n_rents"] == 512

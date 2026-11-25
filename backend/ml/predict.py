@@ -13,8 +13,10 @@ import pandas as pd
 import structlog
 
 from ml.artefacts import load_model
+from ml.community_resolve import resolve_area
 from ml.encoding import align_columns, encode
 from ml.persist import active_run_row, feature_matrix_rows
+from ml.property_types import canonical_type_or_raw
 from ml.shap_explainer import explain_single
 
 log = structlog.get_logger(__name__)
@@ -50,52 +52,6 @@ def _load_active(phase: int) -> dict:
     return bundle
 
 
-_TYPE_CANON = {
-    "apartment": "apartment",
-    "flat": "apartment",
-    "unit": "apartment",
-    "studio": "studio",
-    "villa": "villa",
-    "townhouse": "villa",
-    "penthouse": "penthouse",
-    "hotel apartment": "hotel_apartment",
-}
-
-
-def _canonical_type(raw: str) -> str:
-    return _TYPE_CANON.get((raw or "").strip().lower(), (raw or "").strip().lower())
-
-
-_COMMUNITY_ALIASES = {
-    "dubai marina": "Marsa Dubai",
-    "marina": "Marsa Dubai",
-    "downtown": "Burj Khalifa",
-    "downtown dubai": "Burj Khalifa",
-    "palm": "Palm Jumeirah",
-    "the palm": "Palm Jumeirah",
-    "jumeirah": "Jumeirah First",
-}
-
-
-def _resolve_community(community: str) -> str:
-    """Resolve a popular community name to DLD's area_name_en when we know it,
-    else return the input unchanged (it may already be a real DLD area).
-
-    Delegates to ``ml.community_resolve``, which matches against aliases MINED
-    FROM the raw DLD data (``master_project_en`` → ``area_name_en``) rather than
-    the 7 hand-written entries below - those covered 7 of 127 DLD areas, so most
-    real portal names (e.g. "JVC District 14") resolved to nothing and the
-    listing was scored "Insufficient data" (F21). ``_COMMUNITY_ALIASES`` is kept
-    as a static fallback for when the alias table has not been built yet.
-    """
-    from ml.community_resolve import resolve_community
-
-    resolved = resolve_community(community)
-    if resolved != community:
-        return resolved
-    return _COMMUNITY_ALIASES.get((community or "").strip().lower(), community)
-
-
 def _community_context(
     community: str, canon_type: str, bedrooms, version: int | None
 ) -> dict:
@@ -126,13 +82,24 @@ def _community_context(
     }
 
 
-def _build_row(features: dict, version: int | None, phase: int = 1) -> dict:
-    canon_type = _canonical_type(features.get("property_type", "Apartment"))
-    community = _resolve_community(features.get("community", ""))
-    bedrooms = features.get("bedrooms")
-    ctx = _community_context(community, canon_type, bedrooms, version)
-    sqft = features.get("floor_area_sqft")
-    area_sqm = (float(sqft) / _SQFT_PER_SQM) if sqft else None
+def _segment(
+    community: str, property_type: str, bedrooms, version: int | None
+) -> tuple[str, str, dict]:
+    """Resolve the area and type once and read the segment's context once."""
+    canon_type = canonical_type_or_raw(property_type)
+    resolved = resolve_area(community)
+    return resolved, canon_type, _community_context(resolved, canon_type, bedrooms, version)
+
+
+def _build_row(
+    community: str,
+    canon_type: str,
+    bedrooms,
+    floor_area_sqft,
+    ctx: dict,
+    phase: int = 1,
+) -> dict:
+    area_sqm = (float(floor_area_sqft) / _SQFT_PER_SQM) if floor_area_sqft else None
     row = {
         "community": community,
         "property_type": canon_type,
@@ -155,14 +122,37 @@ def _build_row(features: dict, version: int | None, phase: int = 1) -> dict:
     return row
 
 
-def predict(features: dict, phase: int = 1) -> tuple[float, dict[str, float]]:
-    bundle = _load_active(phase)
-    version = bundle.get("feature_version")
-    row = _build_row(features, version, phase=phase)
+def _predict_row(bundle: dict, row: dict) -> tuple[float, dict[str, float]]:
     X = align_columns(encode(pd.DataFrame([row])), bundle["feature_names"])
     pred = float(bundle["model"].predict(X)[0])
-    shap_vals = explain_single(bundle["model"], X)
-    return round(pred, 3), shap_vals
+    return round(pred, 3), explain_single(bundle["model"], X)
+
+
+def _evidence(ctx: dict) -> dict:
+    """How much real market evidence backs a prediction for this segment."""
+    has_data = (ctx.get("n_sales") or 0) > 0 or (ctx.get("n_rents") or 0) > 0
+    exact = bool(ctx.get("exact_bedrooms_match"))
+    return {
+        "segment_matched": exact and has_data,
+        "segment_fallback": not exact and bool(ctx.get("has_rows")) and has_data,
+        "n_sales": ctx.get("n_sales") or 0,
+        "n_rents": ctx.get("n_rents") or 0,
+    }
+
+
+def predict(features: dict, phase: int = 1) -> tuple[float, dict[str, float]]:
+    bundle = _load_active(phase)
+    bedrooms = features.get("bedrooms")
+    resolved, canon_type, ctx = _segment(
+        features.get("community", ""),
+        features.get("property_type", "Apartment"),
+        bedrooms,
+        bundle.get("feature_version"),
+    )
+    row = _build_row(
+        resolved, canon_type, bedrooms, features.get("floor_area_sqft"), ctx, phase
+    )
+    return _predict_row(bundle, row)
 
 
 def segment_context(
@@ -185,30 +175,14 @@ def segment_context(
       * ``segment_fallback`` - the (community, type) exists at other bedroom counts.
       * neither              - no rows at all; the prediction is an extrapolation.
 
-    Extracted from ``predict_yield_for`` so the /predict route and the listing
-    scorer judge evidence by the same rule instead of only the scorer having one.
+    The /predict route and the listing scorer judge evidence by this same rule
+    (``_evidence``) instead of only the scorer having one.
     """
-    canon_type = _canonical_type(property_type)
-    resolved = _resolve_community(community)
     bundle = _load_active(phase)
-    ctx = _community_context(
-        resolved, canon_type, bedrooms, bundle.get("feature_version")
+    resolved, canon_type, ctx = _segment(
+        community, property_type, bedrooms, bundle.get("feature_version")
     )
-    has_data = (ctx.get("n_sales") or 0) > 0 or (ctx.get("n_rents") or 0) > 0
-    segment_matched = bool(ctx.get("exact_bedrooms_match")) and bool(has_data)
-    segment_fallback = (
-        not ctx.get("exact_bedrooms_match")
-        and bool(ctx.get("has_rows"))
-        and bool(has_data)
-    )
-    return {
-        "resolved_community": resolved,
-        "canonical_type": canon_type,
-        "segment_matched": segment_matched,
-        "segment_fallback": segment_fallback,
-        "n_sales": ctx.get("n_sales") or 0,
-        "n_rents": ctx.get("n_rents") or 0,
-    }
+    return {"resolved_community": resolved, "canonical_type": canon_type, **_evidence(ctx)}
 
 
 def predict_yield_for(
@@ -237,29 +211,22 @@ def predict_yield_for(
       * ``resolved_community`` - the DLD area the community resolved to.
       * ``canonical_type``     - the canonical type used.
 
+    Loads the model, resolves the area and reads the segment once each.
     Raises the same errors as ``predict`` (no active model → RuntimeError).
     """
-    seg = segment_context(community, property_type, bedrooms, phase=phase)
-    canon_type = seg["canonical_type"]
-    resolved = seg["resolved_community"]
-    segment_matched = seg["segment_matched"]
-    segment_fallback = seg["segment_fallback"]
-
-    pct, shap = predict(
-        {
-            "community": community,
-            "property_type": property_type,
-            "bedrooms": bedrooms,
-            "floor_area_sqft": floor_area_sqft,
-        },
-        phase=phase,
+    bundle = _load_active(phase)
+    resolved, canon_type, ctx = _segment(
+        community, property_type, bedrooms, bundle.get("feature_version")
     )
+    row = _build_row(resolved, canon_type, bedrooms, floor_area_sqft, ctx, phase)
+    pct, shap = _predict_row(bundle, row)
+    ev = _evidence(ctx)
     return {
         "gross_yield": pct / 100.0,
         "gross_yield_pct": pct,
         "shap": shap,
-        "segment_matched": segment_matched,
-        "segment_fallback": segment_fallback,
+        "segment_matched": ev["segment_matched"],
+        "segment_fallback": ev["segment_fallback"],
         "resolved_community": resolved,
         "canonical_type": canon_type,
     }
@@ -267,7 +234,7 @@ def predict_yield_for(
 
 def community_median_yield(community: str, phase: int = 1) -> float | None:
     """Mean long-term gross yield across a community's feature-matrix buckets."""
-    community = _resolve_community(community)
+    community = resolve_area(community)
     run = active_run_row(phase=phase) or active_run_row(phase=1)
     version = run.get("feature_version") if run else None
     rows = [r for r in feature_matrix_rows(version) if r["community"] == community]

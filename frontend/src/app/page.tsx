@@ -9,8 +9,8 @@ import { AnalysisFailed } from "@/components/AnalysisFailed";
 import { ScenarioModal } from "@/components/ScenarioModal";
 import { MacroOverlay } from "@/components/MacroOverlay";
 import { getMacroSnapshot, scoreListing, type ScoreOutcome } from "@/lib/api";
-import { LOAD_STEPS } from "@/lib/demo";
-import { SAMPLE_URLS, type ListingSource } from "@/lib/listingSource";
+import { LOAD_STEP_COUNT } from "@/lib/demo";
+import { SAMPLE_URLS, detectSource, type ListingSource } from "@/lib/listingSource";
 import { useTheme } from "@/lib/useTheme";
 import type { MacroSnapshot, ScoreResponse } from "@/lib/types";
 
@@ -99,9 +99,9 @@ export default function Page() {
       let i = 0;
       loadTimer.current = setInterval(() => {
         i++;
-        if (i >= LOAD_STEPS.length) {
+        if (i >= LOAD_STEP_COUNT) {
           minElapsed = true;
-          setLoadStep(LOAD_STEPS.length - 1);
+          setLoadStep(LOAD_STEP_COUNT - 1);
           finish();
         } else {
           setLoadStep(i);
@@ -156,7 +156,9 @@ export default function Page() {
         />
       )}
 
-      {phase === "loading" && <LoadingScreen loadStep={loadStep} />}
+      {phase === "loading" && (
+        <LoadingScreen loadStep={loadStep} source={detectSource(analyzedUrl)} />
+      )}
 
       {phase === "failed" && (
         <AnalysisFailed
@@ -166,7 +168,7 @@ export default function Page() {
         />
       )}
 
-      {phase === "done" && (
+      {phase === "done" && score && (
         <ResultsScreen
           analyzedUrl={analyzedUrl}
           yieldDisplay={yieldNum.toFixed(1)}

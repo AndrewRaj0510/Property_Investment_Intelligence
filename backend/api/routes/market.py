@@ -26,6 +26,8 @@ from db.queries.price_history import (
     coverage_end,
     quarterly_price_history,
 )
+from ml.community_resolve import resolve_area
+from ml.property_types import canonical_type_or_raw
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -45,36 +47,6 @@ NOTE = (
     "not a prediction of future prices, and no projection is shown: this "
     "platform models gross rental yield, not price."
 )
-
-
-def _resolve_area(area: str) -> str:
-    """Resolve a portal community name to DLD's ``area_name_en``.
-
-    Uses the SAME resolver as the model and the yield baseline, so the chart and
-    the numbers beside it describe one place. Falls back to the input when the
-    model package cannot be imported, exactly as the scorer does.
-    """
-    try:
-        from ml.predict import _resolve_community
-
-        return _resolve_community(area)
-    except Exception:  # noqa: BLE001 - resolver unavailable; use the name as given
-        return area
-
-
-def _canonical_type(raw: str) -> str:
-    """Map a free-text property type onto the canonical vocabulary.
-
-    The client passes whatever the listing said ("Apartment", "Residential /
-    Villa"), so this reuses the scorer's alias map rather than a second one that
-    could drift away from it.
-    """
-    try:
-        from services.listing_scorer import canonical_type
-
-        return canonical_type(raw) or (raw or "").strip().lower()
-    except Exception:  # noqa: BLE001
-        return (raw or "").strip().lower()
 
 
 def _with_moving_average(rows: list[dict]) -> list[PricePoint]:
@@ -142,8 +114,8 @@ async def price_history(
         description="Earliest calendar year to include.",
     ),
 ) -> PriceHistory:
-    resolved = _resolve_area(area)
-    ptype = _canonical_type(property_type)
+    resolved = resolve_area(area)
+    ptype = canonical_type_or_raw(property_type)
 
     try:
         rows = quarterly_price_history(resolved, ptype, from_year=from_year)

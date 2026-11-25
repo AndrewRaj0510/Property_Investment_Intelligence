@@ -1,7 +1,8 @@
 """Resolve a portal's community label to a DLD ``area_name_en`` (F21).
 
-Shared by the model (``ml.predict``) and the baseline lookup
-(``services.listing_scorer``) so both always agree on which DLD area a listing
+Shared by the model (``ml.predict``), the baseline lookup
+(``services.listing_scorer``) and the price-history route through
+:func:`resolve_area`, so they always agree on which DLD area a listing
 belongs to - a mismatch there silently produces a model prediction for one area
 scored against another area's medians.
 
@@ -213,3 +214,32 @@ def resolve_community(community: str) -> str:
 
     log.info("community_unresolved", community=raw)
     return raw
+
+
+_STATIC_ALIASES = {
+    "dubai marina": "Marsa Dubai",
+    "marina": "Marsa Dubai",
+    "downtown": "Burj Khalifa",
+    "downtown dubai": "Burj Khalifa",
+    "palm": "Palm Jumeirah",
+    "the palm": "Palm Jumeirah",
+    "jumeirah": "Jumeirah First",
+}
+
+
+def resolve_area(community: str) -> str:
+    """The single entry point for "which DLD area is this?".
+
+    Used by the model, the listing scorer's baseline lookup and the price-history
+    route, so all three describe the same place. Tries :func:`resolve_community`
+    (aliases mined from DLD data), then a small static map kept as a fallback for
+    when the alias table is empty or unreachable, else returns the input.
+    """
+    try:
+        resolved = resolve_community(community)
+    except Exception as exc:  # noqa: BLE001 - alias tables unreachable
+        log.warning("community_resolve_failed", community=community, error=str(exc))
+        resolved = community
+    if resolved != community:
+        return resolved
+    return _STATIC_ALIASES.get((community or "").strip().lower(), community)
